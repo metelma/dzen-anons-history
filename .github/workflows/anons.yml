@@ -1,0 +1,46 @@
+name: Анонс статей Дзена в Телеграм
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # каждые 30 минут (GitHub может запускать с задержкой)
+  workflow_dispatch:          # кнопка ручного запуска
+
+permissions:
+  contents: write             # чтобы сохранить seen.json обратно
+
+concurrency:
+  group: anons
+  cancel-in-progress: false
+
+jobs:
+  anons:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Браузер
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Проверить канал и отправить анонсы
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ vars.TG_CHAT_ID || '@mm_history' }}
+        run: python anons.py
+
+      - name: Запомнить отправленные
+        run: |
+          if ! git diff --quiet seen.json; then
+            git config user.name "anons-bot"
+            git config user.email "anons-bot@users.noreply.github.com"
+            git add seen.json
+            git commit -m "seen: новые статьи"
+            git push
+          fi
